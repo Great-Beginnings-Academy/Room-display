@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Conference Room">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Conference Room Display</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/dist/msal-browser.min.js"></script>
+<style>
+/* ================================================================
+   CONFIGURATION — edit these two sections, then save and upload.
+   ================================================================ */
+
+/* ================================================================ */
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #f2f2f7;
+  color: #1c1c1e;
+  font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Shared overlay shell ─────────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #f2f2f7;
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 24px;
+}
+.overlay.active { display: flex; }
+.overlay-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 40px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+  width: 90%;
+  max-width: 480px;
+}
+.overlay-card h1 { font-size: 22px; font-weight: 700; color: #007aff; margin-bottom: 6px; }
+.overlay-card p  { font-size: 14px; color: #8e8e93; margin-bottom: 24px; line-height: 1.5; }
+
+/* ── Room picker ─────────────────────────────────────────────── */
+.room-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.room-btn {
+  background: #f2f2f7;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 16px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all .15s;
+  font-family: inherit;
+}
+.room-btn:hover  { background: #e8f1ff; border-color: #007aff; }
+.room-btn:active { transform: scale(.97); }
+.room-btn .rb-icon { font-size: 28px; margin-bottom: 6px; }
+.room-btn .rb-name { font-size: 14px; font-weight: 600; color: #1c1c1e; }
+.room-btn .rb-cap  { font-size: 11px; color: #8e8e93; margin-top: 2px; }
+
+/* ── Sign-in ─────────────────────────────────────────────────── */
+.signin-btn {
+  background: #0078d4;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background .2s;
+  font-family: inherit;
+}
+.signin-btn:hover    { background: #006cbf; }
+.signin-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+.signin-note { font-size: 11px; color: #8e8e93; margin-top: 12px; text-align: center; }
+.err-msg { font-size: 12px; color: #c0392b; margin-top: 8px; min-height: 18px; text-align: center; }
+.back-link {
+  font-size: 13px; color: #007aff; cursor: pointer; text-decoration: none;
+  background: none; border: none; font-family: inherit; margin-top: 4px;
+}
+
+/* ── Main display ─────────────────────────────────────────────── */
+#display { display: none; flex-direction: column; min-height: 100vh; }
+
+header {
+  background: #fff;
+  border-bottom: 1px solid #e5e5ea;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.hdr-left { display: flex; flex-direction: column; }
+.room-name { font-size: 20px; font-weight: 700; color: #007aff; }
+.upd       { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.hdr-right { display: flex; align-items: center; gap: 12px; }
+.clk-time  { font-size: 30px; font-weight: 300; letter-spacing: -1px; line-height: 1; text-align: right; }
+.clk-date  { font-size: 11px; color: #8e8e93; margin-top: 1px; text-align: right; }
+.switch-btn {
+  background: #f2f2f7;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #8e8e93;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+.switch-btn:hover { background: #e5e5ea; color: #1c1c1e; }
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 12px;
+  padding: 12px 16px 8px;
+  min-height: 0;
+}
+.left  { display: flex; flex-direction: column; gap: 10px; }
+.card  { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+
+.si {
+  width: 120px; height: 120px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 700; letter-spacing: 1px; text-transform: uppercase; font-size: 12px;
+  border: 3px solid transparent; margin: 0 auto; transition: all .4s;
+}
+.si.av { background: #eaf7ee; color: #1a8f3a; border-color: #34c759; }
+.si.iu { background: #fff0ef; color: #c0392b; border-color: #ff3b30; }
+.si.so { background: #fff8ec; color: #9c5700; border-color: #ff9500; }
+.sic   { font-size: 34px; margin-bottom: 3px; }
+
+.sd  { text-align: center; margin-top: 10px; }
+.sdl { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8e8e93; margin-bottom: 2px; }
+.sdt { font-size: 14px; font-weight: 600; }
+.sds { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+
+.sec { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8e8e93; margin-bottom: 8px; }
+
+.wg  { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.wd  { border-radius: 8px; padding: 6px 4px; text-align: center; background: #f9f9fb; }
+.wd.td { background: #e8f1ff; }
+.wa  { font-size: 9px; text-transform: uppercase; letter-spacing: .7px; color: #8e8e93; }
+.wd.td .wa { color: #007aff; font-weight: 600; }
+.wn  { font-size: 15px; font-weight: 600; margin: 1px 0; }
+.wd.td .wn { color: #007aff; }
+.wp  { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; min-height: 7px; }
+.pip { width: 5px; height: 5px; border-radius: 50%; background: #007aff; opacity: .5; }
+.wd.td .pip { opacity: 1; }
+
+.right { display: flex; flex-direction: column; min-height: 0; }
+.sc    { background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.07); flex: 1; overflow-y: auto; min-height: 0; }
+
+.mr { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f2f2f7; }
+.mr:last-child { border-bottom: none; }
+.mr.cu { background: #fff5f5; margin: 0 -8px; padding: 8px; border-radius: 9px; border-bottom: none; margin-bottom: 1px; }
+.mr.pa { opacity: .38; }
+
+.tc    { min-width: 76px; font-size: 11px; color: #8e8e93; line-height: 1.5; padding-top: 1px; }
+.tc.nw { color: #ff3b30; font-weight: 600; }
+.dot   { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+.dot.cu { background: #ff3b30; } .dot.up { background: #007aff; } .dot.pa { background: #c7c7cc; }
+.mi    { flex: 1; min-width: 0; }
+.mt    { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm    { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.db    { font-size: 11px; background: #f2f2f7; color: #8e8e93; border-radius: 5px; padding: 2px 6px; white-space: nowrap; flex-shrink: 0; }
+.nm    { text-align: center; color: #8e8e93; font-size: 13px; padding: 28px; }
+.rn    { font-size: 10px; color: #c7c7cc; text-align: right; padding: 4px 2px 0; }
+</style>
+</head>
+<body>
+
+<!-- ── 1. Room picker ──────────────────────────────────────────── -->
+<div class="overlay" id="roomPicker">
+  <div class="overlay-card">
+    <h1>Select a Room</h1>
+    <p>Choose the room this display is assigned to. You can change it later using the switch button.</p>
+    <div class="room-grid" id="roomGrid"></div>
+  </div>
+</div>
+
+<!-- ── 2. Sign-in ─────────────────────────────────────────────── -->
+<div class="overlay" id="signinScreen">
+  <div class="overlay-card">
+    <h1 id="signinRoomName">Conference Room</h1>
+    <p>Sign in with your Microsoft account to connect to the room calendar. You'll only need to do this once.</p>
+    <button class="signin-btn" id="signinBtn" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+        <rect width="10" height="10" fill="#f25022"/>
+        <rect x="11" width="10" height="10" fill="#7fba00"/>
+        <rect y="11" width="10" height="10" fill="#00a4ef"/>
+        <rect x="11" y="11" width="10" height="10" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="signin-note">Your credentials are stored locally and never shared.</div>
+    <div class="err-msg" id="errMsg"></div>
+    <div style="text-align:center;margin-top:12px">
+      <button class="back-link" onclick="showRoomPicker()">← Choose a different room</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 3. Main display ─────────────────────────────────────────── -->
+<div id="display">
+  <header>
+    <div class="hdr-left">
+      <div class="room-name" id="roomNameDisplay">Conference Room</div>
+      <div class="upd" id="upd"></div>
+    </div>
+    <div class="hdr-right">
+      <div>
+        <div class="clk-time" id="clkTime">--:--</div>
+        <div class="clk-date" id="clkDate"></div>
+      </div>
+      <button class="switch-btn" onclick="showRoomPicker()" title="Switch room">⇄ Switch</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="left">
+      <div class="card">
+        <div class="si av" id="si">
+          <div class="sic" id="sic">✓</div>
+          <div id="sit">Available</div>
+        </div>
+        <div class="sd">
+          <div class="sdl" id="sdl">Status</div>
+          <div class="sdt" id="sdt">Loading…</div>
+          <div class="sds" id="sds"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec">This Week</div>
+        <div class="wg" id="wg"></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="sc">
+        <div class="sec">Today's Schedule</div>
+        <div id="sl"><div class="nm">Loading…</div></div>
+      </div>
+      <div class="rn" id="rn"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ================================================================
+//  CONFIGURATION — fill in your Azure AD values, then add your rooms.
+// ================================================================
+const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';   // Application (client) ID from Azure AD
+const TENANT_ID = 'YOUR_TENANT_ID_HERE';   // Directory (tenant) ID from Azure AD
+
+const ROOMS = [
+  { name: 'Little Conference Room', email: 'LittleConferenceRoom@abcgb.net', icon: '🪑', capacity: 10 },
+  // Add more rooms below — copy the line above and change the values:
+  // { name: 'Big Conference Room',    email: 'BigConferenceRoom@abcgb.net',    icon: '🏢', capacity: 20 },
+  // { name: 'Training Room',          email: 'TrainingRoom@abcgb.net',         icon: '📚', capacity: 30 },
+];
+// ================================================================
+
+// ── MSAL ─────────────────────────────────────────────────────────
+const msalInstance = new msal.PublicClientApplication({
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
+});
+const SCOPES = ['Calendars.Read'];
+
+async function getToken() {
+  const accounts = msalInstance.getAllAccounts();
+  if (!accounts.length) return null;
+  try {
+    const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+    return r.accessToken;
+  } catch(e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES, account: accounts[0] });
+      return r.accessToken;
+    }
+    throw e;
+  }
+}
+
+async function signIn() {
+  const btn = document.getElementById('signinBtn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  document.getElementById('errMsg').textContent = '';
+  try {
+    await msalInstance.loginPopup({ scopes: SCOPES });
+    startDisplay();
+  } catch(e) {
+    document.getElementById('errMsg').textContent = e.message || 'Sign-in failed.';
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 21 21" fill="none"><rect width="10" height="10" fill="#f25022"/><rect x="11" width="10" height="10" fill="#7fba00"/><rect y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg> Sign in with Microsoft`;
+  }
+}
+
+// ── Room picker ───────────────────────────────────────────────────
+let activeRoom = null;
+
+function buildRoomGrid() {
+  const grid = document.getElementById('roomGrid');
+  grid.innerHTML = ROOMS.map((r, i) => `
+    <button class="room-btn" onclick="selectRoom(${i})">
+      <div class="rb-icon">${r.icon || '🏢'}</div>
+      <div class="rb-name">${r.name}</div>
+      ${r.capacity ? `<div class="rb-cap">Capacity ${r.capacity}</div>` : ''}
+    </button>
+  `).join('');
+}
+
+function selectRoom(index) {
+  activeRoom = ROOMS[index];
+  localStorage.setItem('cr_selectedRoom', JSON.stringify(activeRoom));
+  document.getElementById('signinRoomName').textContent = activeRoom.name;
+  hideAll();
+  if (msalInstance.getAllAccounts().length > 0) {
+    startDisplay();
+  } else {
+    document.getElementById('signinScreen').classList.add('active');
+  }
+}
+
+function showRoomPicker() {
+  hideAll();
+  document.getElementById('roomPicker').classList.add('active');
+}
+
+function hideAll() {
+  document.getElementById('roomPicker').classList.remove('active');
+  document.getElementById('signinScreen').classList.remove('active');
+  document.getElementById('display').style.display = 'none';
+}
+
+// ── Display helpers ───────────────────────────────────────────────
+const DNAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MNAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DABBR  = ['Mon','Tue','Wed','Thu','Fri'];
+
+function ft(iso) {
+  const d = new Date(iso), h = d.getHours(), m = String(d.getMinutes()).padStart(2,'0');
+  return `${h%12||12}:${m} ${h>=12?'PM':'AM'}`;
+}
+function fd(s, e) {
+  const m = Math.round((new Date(e)-new Date(s))/60000), h = Math.floor(m/60), r = m%60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${m}m`;
+}
+function mu(iso) { return Math.round((new Date(iso)-new Date())/60000); }
+function getStart(e) { return new Date(e.start.dateTime || e.start); }
+function getEnd(e)   { return new Date(e.end.dateTime   || e.end);   }
+
+function updateClock() {
+  const n = new Date(), h = n.getHours(), m = String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('clkTime').textContent = `${h%12||12}:${m} ${h>=12?'PM':'AM'}`;
+  document.getElementById('clkDate').textContent = `${DNAMES[n.getDay()]}, ${MNAMES[n.getMonth()]} ${n.getDate()}, ${n.getFullYear()}`;
+}
+
+function buildWeekGrid(events) {
+  const t = new Date(), dw = t.getDay(), dm = dw===0 ? -6 : 1-dw;
+  const mon = new Date(t.getFullYear(), t.getMonth(), t.getDate()+dm);
+  const g = document.getElementById('wg'); g.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate()+i);
+    const it = d.toDateString() === t.toDateString();
+    const cnt = events.filter(e => getStart(e).toDateString() === d.toDateString()).length;
+    const pips = Array.from({length: Math.min(cnt,5)}, () => '<div class="pip"></div>').join('');
+    const el = document.createElement('div');
+    el.className = 'wd' + (it ? ' td' : '');
+    el.innerHTML = `<div class="wa">${DABBR[i]}</div><div class="wn">${d.getDate()}</div><div class="wp">${pips}</div>`;
+    g.appendChild(el);
+  }
+}
+
+function renderSchedule(events) {
+  const n = new Date(), ts = n.toDateString();
+  const ev = events.filter(e => getStart(e).toDateString() === ts).sort((a,b) => getStart(a)-getStart(b));
+  const sl = document.getElementById('sl');
+  if (!ev.length) { sl.innerHTML = '<div class="nm">No meetings today</div>'; return; }
+  sl.innerHTML = ev.map(e => {
+    const s = getStart(e), en = getEnd(e);
+    const ip = en < n, ic = s <= n && en > n;
+    const rc = ip ? 'mr pa' : ic ? 'mr cu' : 'mr';
+    const meta = ic ? `Ends in ${mu(en)}m` : (!ip && mu(s) < 60) ? `In ${mu(s)}m` : '';
+    return `<div class="${rc}">
+      <div class="${ic?'tc nw':'tc'}">${ft(s)}<br><span style="opacity:.75">${ft(en)}</span></div>
+      <div class="${ip?'dot pa':ic?'dot cu':'dot up'}"></div>
+      <div class="mi"><div class="mt">${e.subject||'Meeting'}</div>${meta?`<div class="mm">${meta}</div>`:''}</div>
+      <div class="db">${fd(s,en)}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateStatus(events) {
+  const n = new Date(), ts = n.toDateString();
+  const ev = events.filter(e => getStart(e).toDateString() === ts).sort((a,b) => getStart(a)-getStart(b));
+  const si = document.getElementById('si'), sic = document.getElementById('sic'), sit = document.getElementById('sit');
+  const sdl = document.getElementById('sdl'), sdt = document.getElementById('sdt'), sds = document.getElementById('sds');
+  const cur = ev.find(e => getStart(e) <= n && getEnd(e) > n);
+  const nxt = ev.find(e => getStart(e) > n);
+  if (cur) {
+    si.className='si iu'; sic.textContent='●'; sit.textContent='In Use';
+    sdl.textContent='Current Meeting'; sdt.textContent=cur.subject||'Meeting';
+    sds.textContent=`Ends ${ft(getEnd(cur))} · ${mu(getEnd(cur))}m left`;
+  } else if (nxt) {
+    const m = mu(getStart(nxt));
+    si.className = m<=15 ? 'si so' : 'si av';
+    sic.textContent = m<=15 ? '◷' : '✓'; sit.textContent = m<=15 ? 'Soon' : 'Available';
+    sdl.textContent = m<=15 ? `Starting in ${m} min` : 'Next Meeting';
+    sdt.textContent = nxt.subject||'Meeting'; sds.textContent = ft(getStart(nxt));
+  } else {
+    si.className='si av'; sic.textContent='✓'; sit.textContent='Available';
+    sdl.textContent='Free today'; sdt.textContent='No more meetings'; sds.textContent='';
+  }
+}
+
+// ── Graph API ─────────────────────────────────────────────────────
+async function fetchEvents() {
+  const token = await getToken();
+  if (!token || !activeRoom) throw new Error('Not ready');
+  const n = new Date(), dw = n.getDay(), dm = dw===0 ? -6 : 1-dw;
+  const mon = new Date(n.getFullYear(), n.getMonth(), n.getDate()+dm);
+  const sat = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate()+5);
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(activeRoom.email)}/calendarView`
+    + `?startDateTime=${mon.toISOString()}&endDateTime=${sat.toISOString()}`
+    + `&$select=subject,start,end,isCancelled,showAs&$orderby=start/dateTime&$top=50`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error(`Graph ${resp.status}`);
+  const data = await resp.json();
+  return (data.value || []).filter(e => !e.isCancelled);
+}
+
+// ── Main loop ─────────────────────────────────────────────────────
+let cachedEvents = [], clockInterval, renderInterval, fetchInterval;
+
+async function loadAndRender() {
+  try {
+    cachedEvents = await fetchEvents();
+    buildWeekGrid(cachedEvents);
+    renderSchedule(cachedEvents);
+    updateStatus(cachedEvents);
+    document.getElementById('upd').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    document.getElementById('rn').textContent = '';
+  } catch(e) {
+    document.getElementById('rn').textContent = 'Refresh failed: ' + e.message;
+  }
+}
+
+function startDisplay() {
+  hideAll();
+  document.getElementById('display').style.display = 'flex';
+  document.getElementById('roomNameDisplay').textContent = activeRoom.name;
+
+  // Clear any existing intervals
+  clearInterval(clockInterval); clearInterval(renderInterval); clearInterval(fetchInterval);
+
+  updateClock();
+  clockInterval  = setInterval(updateClock, 1000);
+  renderInterval = setInterval(() => { if (cachedEvents.length) { renderSchedule(cachedEvents); updateStatus(cachedEvents); } }, 30000);
+  fetchInterval  = setInterval(loadAndRender, 5 * 60 * 1000);
+  loadAndRender();
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+buildRoomGrid();
+
+msalInstance.handleRedirectPromise().then(() => {
+  const savedRoom = localStorage.getItem('cr_selectedRoom');
+  if (savedRoom) {
+    try {
+      activeRoom = JSON.parse(savedRoom);
+      document.getElementById('signinRoomName').textContent = activeRoom.name;
+      if (msalInstance.getAllAccounts().length > 0) {
+        startDisplay();
+      } else {
+        document.getElementById('signinScreen').classList.add('active');
+      }
+    } catch(e) {
+      showRoomPicker();
+    }
+  } else {
+    showRoomPicker();
+  }
+}).catch(() => showRoomPicker());
+</script>
+</body>
+</html>
