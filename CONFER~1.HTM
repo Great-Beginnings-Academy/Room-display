@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Conference Room</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f2f2f7;color:#1c1c1e;font-family:-apple-system,'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+header{background:#fff;border-bottom:1px solid #e5e5ea;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.room{font-size:22px;font-weight:700;color:#007aff}
+.upd{font-size:11px;color:#8e8e93;margin-top:2px}
+.clk{text-align:right}
+.ct{font-size:32px;font-weight:300;letter-spacing:-1px;line-height:1}
+.cd{font-size:11px;color:#8e8e93;margin-top:2px}
+main{flex:1;display:grid;grid-template-columns:280px 1fr;gap:12px;padding:12px 16px 8px;min-height:0}
+.left{display:flex;flex-direction:column;gap:10px}
+.card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.si{width:120px;height:120px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:12px;border:3px solid transparent;margin:0 auto;transition:all .4s}
+.si.av{background:#eaf7ee;color:#1a8f3a;border-color:#34c759}
+.si.iu{background:#fff0ef;color:#c0392b;border-color:#ff3b30}
+.si.so{background:#fff8ec;color:#9c5700;border-color:#ff9500}
+.sic{font-size:34px;margin-bottom:3px}
+.sd{text-align:center;margin-top:10px}
+.sdl{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#8e8e93;margin-bottom:2px}
+.sdt{font-size:14px;font-weight:600}
+.sds{font-size:11px;color:#8e8e93;margin-top:1px}
+.sec{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#8e8e93;margin-bottom:8px}
+.wg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.wd{border-radius:8px;padding:6px 4px;text-align:center;background:#f9f9fb}
+.wd.td{background:#e8f1ff}
+.wa{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#8e8e93}
+.wd.td .wa{color:#007aff;font-weight:600}
+.wn{font-size:15px;font-weight:600;margin:1px 0}
+.wd.td .wn{color:#007aff}
+.wp{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;min-height:7px}
+.pip{width:5px;height:5px;border-radius:50%;background:#007aff;opacity:.5}
+.wd.td .pip{opacity:1}
+.right{display:flex;flex-direction:column;min-height:0}
+.sc{background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.07);flex:1;overflow-y:auto;min-height:0}
+.mr{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f2f2f7}
+.mr:last-child{border-bottom:none}
+.mr.cu{background:#fff5f5;margin:0 -8px;padding:8px;border-radius:9px;border-bottom:none;margin-bottom:1px}
+.mr.pa{opacity:.38}
+.tc{min-width:76px;font-size:11px;color:#8e8e93;line-height:1.5;padding-top:1px}
+.tc.nw{color:#ff3b30;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.dot.cu{background:#ff3b30}.dot.up{background:#007aff}.dot.pa{background:#c7c7cc}
+.mi{flex:1;min-width:0}
+.mt{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm{font-size:11px;color:#8e8e93;margin-top:1px}
+.db{font-size:11px;background:#f2f2f7;color:#8e8e93;border-radius:5px;padding:2px 6px;white-space:nowrap;flex-shrink:0}
+.nm{text-align:center;color:#8e8e93;font-size:13px;padding:28px}
+.rn{font-size:10px;color:#c7c7cc;text-align:right;padding:4px 2px 0}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="room">Little Conference Room</div>
+    <div class="upd" id="upd"></div>
+  </div>
+  <div class="clk">
+    <div class="ct" id="ct">--:--</div>
+    <div class="cd" id="cd"></div>
+  </div>
+</header>
+<main>
+  <div class="left">
+    <div class="card">
+      <div class="si av" id="si"><div class="sic" id="sic">✓</div><div id="sit">Available</div></div>
+      <div class="sd">
+        <div class="sdl" id="sdl">Status</div>
+        <div class="sdt" id="sdt">Loading…</div>
+        <div class="sds" id="sds"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">This Week</div>
+      <div class="wg" id="wg"></div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="sc">
+      <div class="sec">Today's Schedule</div>
+      <div id="sl"><div class="nm">Loading…</div></div>
+    </div>
+    <div class="rn" id="rn"></div>
+  </div>
+</main>
+<script>
+// DATA INJECTED BY SCHEDULED TASK — do not edit this line
+const CALENDAR_DATA = [{"id": "AAkALg1", "subject": "Kellirae Long", "organizer": "Kellirae@abcgb.net", "attendees": ["Kellirae@abcgb.net", "rhonda@abcgb.net", "jimmy@abcgb.net"], "start": "2026-06-15T17:00:00.000Z", "end": "2026-06-15T18:30:00.000Z", "location": "Little Conference Room", "isAllDay": false, "isCancelled": false}, {"id": "AAkALg2", "subject": "Kellirae Long", "organizer": "Kellirae@abcgb.net", "attendees": ["Kellirae@abcgb.net", "jimmy@abcgb.net", "rhonda@abcgb.net"], "start": "2026-06-16T16:30:00.000Z", "end": "2026-06-16T18:30:00.000Z", "location": "Little Conference Room", "isAllDay": false, "isCancelled": false}];
+const LAST_UPDATED = "2026-06-15T18:09:00.000Z";
+
+const DNAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MNAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DABBR=['Mon','Tue','Wed','Thu','Fri'];
+
+function ft(iso){const d=new Date(iso),h=d.getHours(),m=String(d.getMinutes()).padStart(2,'0');return`${h%12||12}:${m} ${h>=12?'PM':'AM'}`}
+function fd(s,e){const m=Math.round((new Date(e)-new Date(s))/60000),h=Math.floor(m/60),r=m%60;return h?(r?`${h}h ${r}m`:`${h}h`):`${m}m`}
+function mu(iso){return Math.round((new Date(iso)-new Date())/60000)}
+
+function updateClock(){
+  const n=new Date(),h=n.getHours(),m=String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('ct').textContent=`${h%12||12}:${m} ${h>=12?'PM':'AM'}`;
+  document.getElementById('cd').textContent=`${DNAMES[n.getDay()]}, ${MNAMES[n.getMonth()]} ${n.getDate()}, ${n.getFullYear()}`;
+}
+
+function buildWeekGrid(){
+  const t=new Date(),dw=t.getDay(),dm=dw===0?-6:1-dw;
+  const mon=new Date(t.getFullYear(),t.getMonth(),t.getDate()+dm);
+  const g=document.getElementById('wg');g.innerHTML='';
+  for(let i=0;i<5;i++){
+    const d=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i);
+    const it=d.toDateString()===t.toDateString();
+    const cnt=CALENDAR_DATA.filter(e=>new Date(e.start).toDateString()===d.toDateString()).length;
+    const pips=Array.from({length:Math.min(cnt,5)},()=>'<div class="pip"></div>').join('');
+    const el=document.createElement('div');
+    el.className='wd'+(it?' td':'');
+    el.innerHTML=`<div class="wa">${DABBR[i]}</div><div class="wn">${d.getDate()}</div><div class="wp">${pips}</div>`;
+    g.appendChild(el);
+  }
+}
+
+function renderSchedule(){
+  const n=new Date(),ts=n.toDateString();
+  const ev=CALENDAR_DATA.filter(e=>new Date(e.start).toDateString()===ts).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const sl=document.getElementById('sl');
+  if(!ev.length){sl.innerHTML='<div class="nm">No meetings today</div>';return}
+  sl.innerHTML=ev.map(e=>{
+    const s=new Date(e.start),en=new Date(e.end);
+    const ip=en<n,ic=s<=n&&en>n;
+    const rc=ip?'mr pa':ic?'mr cu':'mr';
+    const dc=ip?'dot pa':ic?'dot cu':'dot up';
+    const tc=ic?'tc nw':'tc';
+    const meta=ic?`Ends in ${mu(e.end)}m`:(!ip&&mu(e.start)<60)?`In ${mu(e.start)}m`:'';
+    return`<div class="${rc}"><div class="${tc}">${ft(e.start)}<br><span style="opacity:.75">${ft(e.end)}</span></div><div class="${dc}"></div><div class="mi"><div class="mt">${e.subject||'Meeting'}</div>${meta?`<div class="mm">${meta}</div>`:''}</div><div class="db">${fd(e.start,e.end)}</div></div>`;
+  }).join('');
+}
+
+function updateStatus(){
+  const n=new Date(),ts=n.toDateString();
+  const ev=CALENDAR_DATA.filter(e=>new Date(e.start).toDateString()===ts).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const si=document.getElementById('si'),sic=document.getElementById('sic'),sit=document.getElementById('sit');
+  const sdl=document.getElementById('sdl'),sdt=document.getElementById('sdt'),sds=document.getElementById('sds');
+  const cur=ev.find(e=>new Date(e.start)<=n&&new Date(e.end)>n);
+  const nxt=ev.find(e=>new Date(e.start)>n);
+  if(cur){
+    si.className='si iu';sic.textContent='●';sit.textContent='In Use';
+    sdl.textContent='Current Meeting';sdt.textContent=cur.subject||'Meeting';sds.textContent=`Ends ${ft(cur.end)} · ${mu(cur.end)}m left`;
+  } else if(nxt){
+    const m=mu(nxt.start);
+    if(m<=15){si.className='si so';sic.textContent='◷';sit.textContent='Soon';}
+    else{si.className='si av';sic.textContent='✓';sit.textContent='Available';}
+    sdl.textContent=m<=15?`Starting in ${m} min`:'Next Meeting';
+    sdt.textContent=nxt.subject||'Meeting';sds.textContent=ft(nxt.start);
+  } else {
+    si.className='si av';sic.textContent='✓';sit.textContent='Available';
+    sdl.textContent='Free today';sdt.textContent='No more meetings';sds.textContent='';
+  }
+}
+
+// Init
+updateClock();
+setInterval(updateClock, 1000);
+buildWeekGrid();
+renderSchedule();
+updateStatus();
+setInterval(()=>{renderSchedule();updateStatus();}, 30000);
+
+if(LAST_UPDATED){
+  try{document.getElementById('upd').textContent='Updated '+new Date(LAST_UPDATED).toLocaleTimeString();}catch(e){}
+}
+</script>
+</body>
+</html>
