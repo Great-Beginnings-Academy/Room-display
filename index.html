@@ -12,11 +12,13 @@
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
 body {
   background: #f2f2f7;
   color: #1c1c1e;
   font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: background-color .6s ease;
@@ -45,6 +47,8 @@ body.st-so { background: #b45309; }
   box-shadow: 0 4px 24px rgba(0,0,0,0.1);
   width: 90%;
   max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .overlay-card h1 { font-size: 22px; font-weight: 700; color: #007aff; margin-bottom: 6px; }
 .overlay-card p  { font-size: 14px; color: #8e8e93; margin-bottom: 24px; line-height: 1.5; }
@@ -99,7 +103,7 @@ body.st-so { background: #b45309; }
 }
 
 /* ── Main display ─────────────────────────────────────────────── */
-#display { display: none; flex-direction: column; min-height: 100vh; }
+#display { display: none; flex-direction: column; height: 100%; min-height: 0; }
 
 header {
   background: #fff;
@@ -155,6 +159,7 @@ main {
 .sdl { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8e8e93; margin-bottom: 2px; }
 .sdt { font-size: 14px; font-weight: 600; }
 .sds { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.upn { text-align: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f2f2f7; }
 
 /* ── Use Now / End Now buttons ───────────────────────────────── */
 .use-btn {
@@ -166,17 +171,27 @@ main {
 .use-btn:hover  { background: #d93025; }
 .use-btn.end    { background: #8e8e93; }
 .use-btn.end:hover { background: #6e6e73; }
+.use-btn.book   { background: #007aff; margin-top: 8px; }
+.use-btn.book:hover { background: #006cbf; }
+.use-btn:disabled { background: #c7c7cc; cursor: not-allowed; }
 
-/* ── Duration picker overlay ─────────────────────────────────── */
-#durPicker {
+/* ── Duration / book picker overlays ────────────────────────── */
+#durPicker, #bookPicker {
   display: none; position: fixed; inset: 0;
   background: rgba(0,0,0,.45); z-index: 200;
   align-items: center; justify-content: center;
 }
-#durPicker.active { display: flex; }
+#durPicker.active, #bookPicker.active { display: flex; }
+.book-input {
+  width: 100%; padding: 10px 12px; margin-bottom: 14px;
+  border: 2px solid #f2f2f7; border-radius: 10px;
+  font-size: 14px; font-family: inherit; background: #f9f9fb;
+}
+.book-input:focus { outline: none; border-color: #007aff; background: #fff; }
 .dur-card {
   background: #fff; border-radius: 20px; padding: 28px 32px;
   width: 90%; max-width: 340px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  max-height: 90vh; overflow-y: auto;
 }
 .dur-card h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
 .dur-card p  { font-size: 13px; color: #8e8e93; margin-bottom: 18px; }
@@ -208,7 +223,10 @@ main {
 .wd.td .pip { opacity: 1; }
 
 .right { display: flex; flex-direction: column; min-height: 0; }
-.sc    { background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.07); flex: 1; overflow-y: auto; min-height: 0; }
+.sc    { background: #fff; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.07); flex: 1; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.sc::-webkit-scrollbar { width: 6px; }
+.sc::-webkit-scrollbar-track { background: transparent; }
+.sc::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 3px; }
 
 .mr { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f2f2f7; }
 .mr:last-child { border-bottom: none; }
@@ -242,6 +260,23 @@ main {
       <button class="dur-opt" onclick="startOverride(0)">Until I stop</button>
     </div>
     <button class="dur-cancel" onclick="closeDurPicker()">Cancel</button>
+  </div>
+</div>
+
+<!-- ── Book meeting picker ─────────────────────────────────────── -->
+<div id="bookPicker">
+  <div class="dur-card">
+    <h2>📅 Book <span id="bookRoomName">This Room</span></h2>
+    <p>Adds a meeting directly to this room's calendar, starting now.</p>
+    <input type="text" class="book-input" id="bookTitle" placeholder="Meeting title (optional)" maxlength="100">
+    <div class="dur-grid">
+      <button class="dur-opt" onclick="bookMeeting(30)">30 min</button>
+      <button class="dur-opt" onclick="bookMeeting(60)">1 hour</button>
+      <button class="dur-opt" onclick="bookMeeting(90)">1.5 hrs</button>
+      <button class="dur-opt" onclick="bookMeeting(120)">2 hours</button>
+    </div>
+    <div class="err-msg" id="bookErr"></div>
+    <button class="dur-cancel" onclick="closeBookPicker()">Cancel</button>
   </div>
 </div>
 
@@ -304,7 +339,13 @@ main {
           <div class="sdt" id="sdt">Loading…</div>
           <div class="sds" id="sds"></div>
         </div>
+        <div class="upn" id="upn" style="display:none">
+          <div class="sdl">Up Next</div>
+          <div class="sdt" id="upnTitle"></div>
+          <div class="sds" id="upnTime"></div>
+        </div>
         <button class="use-btn" id="useBtn" onclick="onUseBtnTap()">🔴 Use Now</button>
+        <button class="use-btn book" id="bookBtn" onclick="openBookPicker()">📅 Book Meeting</button>
       </div>
       <div class="card">
         <div class="sec">This Week</div>
@@ -380,7 +421,7 @@ const ROOMS = [
 
 const REDIRECT_URI  = window.location.origin + window.location.pathname;
 const AUTHORITY     = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0`;
-const SCOPES        = 'Calendars.Read offline_access';
+const SCOPES        = 'Calendars.ReadWrite offline_access';
 
 // ── PKCE helpers (no library needed) ─────────────────────────────
 function b64url(buf) {
@@ -600,12 +641,25 @@ function updateStatus(events) {
         sdl = document.getElementById('sdl'),
         sdt = document.getElementById('sdt'),
         sds = document.getElementById('sds'),
-        btn = document.getElementById('useBtn');
+        btn = document.getElementById('useBtn'),
+        upn = document.getElementById('upn'),
+        upnTitle = document.getElementById('upnTitle'),
+        upnTime  = document.getElementById('upnTime');
 
   function setBodyStatus(cls) {
     document.body.classList.remove('st-av','st-iu','st-so');
     document.body.classList.add(cls);
   }
+
+  function showUpNext(meeting) {
+    if (!meeting) { upn.style.display = 'none'; return; }
+    upn.style.display = 'block';
+    upnTitle.textContent = meeting.subject || 'Meeting';
+    upnTime.textContent = `${ft(getStart(meeting))} · ${fd(getStart(meeting), getEnd(meeting))}`;
+  }
+
+  const cur = ev.find(e => getStart(e) <= n && getEnd(e) > n);
+  const nxt = ev.find(e => getStart(e) > n);
 
   // ── Manual override takes priority ──
   const ovr = getOverride();
@@ -617,18 +671,18 @@ function updateStatus(events) {
       ? `Ends in ${Math.max(0, mu(ovr.until))}m`
       : 'Until manually ended';
     btn.textContent = '✓ End Now'; btn.className = 'use-btn end';
+    showUpNext(nxt);
     return;
   }
 
   btn.textContent = '🔴 Use Now'; btn.className = 'use-btn';
 
-  const cur = ev.find(e => getStart(e) <= n && getEnd(e) > n);
-  const nxt = ev.find(e => getStart(e) > n);
   if (cur) {
     setBodyStatus('st-iu');
     si.className='si iu'; sic.textContent='●'; sit.textContent='In Use';
     sdl.textContent='Current Meeting'; sdt.textContent=cur.subject||'Meeting';
     sds.textContent=`Ends ${ft(getEnd(cur))} · ${mu(getEnd(cur))}m left`;
+    showUpNext(nxt);
   } else if (nxt) {
     const m = mu(getStart(nxt));
     setBodyStatus(m<=15 ? 'st-so' : 'st-av');
@@ -638,10 +692,14 @@ function updateStatus(events) {
     sdl.textContent = m<=15 ? `Starting in ${m} min` : 'Next Meeting';
     sdt.textContent = nxt.subject||'Meeting';
     sds.textContent = ft(getStart(nxt));
+    // nxt is already the headline; show the one after it, if any
+    const afterNxt = ev.find(e => getStart(e) > getStart(nxt));
+    showUpNext(afterNxt);
   } else {
     setBodyStatus('st-av');
     si.className='si av'; sic.textContent='✓'; sit.textContent='Available';
     sdl.textContent='Free today'; sdt.textContent='No more meetings'; sds.textContent='';
+    showUpNext(null);
   }
 }
 
@@ -684,6 +742,73 @@ function onUseBtnTap() {
 
 function closeDurPicker() {
   document.getElementById('durPicker').classList.remove('active');
+}
+
+// ── Book a real meeting (Microsoft Graph) ──────────────────────────
+function openBookPicker() {
+  document.getElementById('bookErr').textContent = '';
+  document.getElementById('bookTitle').value = '';
+  document.getElementById('bookRoomName').textContent = activeRoom ? activeRoom.name : 'this room';
+  document.getElementById('bookPicker').classList.add('active');
+  setTimeout(() => document.getElementById('bookTitle').focus(), 50);
+}
+
+function closeBookPicker() {
+  document.getElementById('bookPicker').classList.remove('active');
+}
+
+async function bookMeeting(minutes) {
+  const errEl  = document.getElementById('bookErr');
+  const titleEl = document.getElementById('bookTitle');
+  const opts   = document.querySelectorAll('#bookPicker .dur-opt');
+  errEl.textContent = '';
+
+  if (!activeRoom) { errEl.textContent = 'No room selected.'; return; }
+
+  const title = titleEl.value.trim() || 'Room Reservation';
+  opts.forEach(b => b.disabled = true);
+
+  try {
+    const token = await getToken();
+    if (!token) throw new Error('Not signed in.');
+
+    const start = new Date();
+    const end   = new Date(start.getTime() + minutes * 60000);
+
+    const resp = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(activeRoom.email)}/events`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        subject: title,
+        start: { dateTime: start.toISOString(), timeZone: 'UTC' },
+        end:   { dateTime: end.toISOString(),   timeZone: 'UTC' },
+        location: { displayName: activeRoom.name }
+      })
+    });
+
+    if (resp.status === 401) {
+      clearTokens();
+      closeBookPicker();
+      showRoomPicker();
+      throw new Error('Please sign in again to book.');
+    }
+    if (resp.status === 403) {
+      throw new Error('Not permitted to book this room — ask your admin to grant Editor access on its calendar.');
+    }
+    if (!resp.ok) throw new Error(`Booking failed (${resp.status})`);
+
+    closeBookPicker();
+    document.getElementById('rn').textContent = 'Booked — refreshing…';
+    loadAndRender();
+    setTimeout(loadAndRender, 4000); // give Graph a moment to reflect the new event
+  } catch (e) {
+    errEl.textContent = e.message;
+  } finally {
+    opts.forEach(b => b.disabled = false);
+  }
 }
 
 // ── Graph API ─────────────────────────────────────────────────────
